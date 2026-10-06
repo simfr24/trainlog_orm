@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION railway_line_high(z integer, x integer, y integer)
   STRICT
   PARALLEL SAFE
 RETURN (
-  WITH lines AS (
+  WITH candidates AS (
     SELECT
       id, way, way_length,
       layer, rank, feature, state, usage, service, highspeed, preserved, tunnel, bridge, name, ref,
@@ -75,6 +75,21 @@ RETURN (
         ELSE
           true
       END
+  ),
+  -- Untagged narrow gauge (which upstream only shows from zoom 10) is mostly short tourist and
+  -- industrial lines that came out as scattered dots; below zoom 10 keep only networks of at
+  -- least 30 km (way_length is in Web Mercator metres)
+  untagged AS (
+    SELECT id, way_length, ST_ClusterDBSCAN(way, eps := 50, minpoints := 1) OVER () AS network
+    FROM candidates
+    WHERE z < 10 AND feature = 'narrow_gauge' AND usage IS NULL
+  ),
+  lines AS (
+    SELECT * FROM candidates
+    WHERE id NOT IN (
+      SELECT id FROM untagged
+      WHERE network IN (SELECT network FROM untagged GROUP BY network HAVING sum(way_length) < 30000)
+    )
   ),
   merged AS (
     SELECT * FROM lines WHERE state = 'present'
