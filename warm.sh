@@ -35,8 +35,8 @@ done >> "$list"
 tiles railway_line_high,railway_text_km 7 8 >> "$list"
 fi
 # The overlay below zoom 6 as images, rendered from the vector tiles above (martin-render),
-# so last
-for mode in standard speed signals electrification track; do
+# so last. SKIP_RASTER=1 leaves them out, until Trainlog serves their styles
+[ -n "${SKIP_RASTER:-}" ] || for mode in standard speed signals electrification track; do
   tiles "raster/$mode" 0 5 .png
 done >> "$list"
 
