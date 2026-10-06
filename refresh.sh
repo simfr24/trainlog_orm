@@ -14,6 +14,7 @@ echo "== $(date -Is) refresh start"
 docker compose pull orm-db
 docker compose build --pull martin-orm orm
 docker compose up -d --wait orm-db
+docker compose run --rm orm-patch
 # Martin's pool held connections to the old database container
 docker compose up -d --force-recreate martin-orm
 docker compose up -d orm

@@ -42,6 +42,23 @@ services:
     networks:
       - orm
 
+  # One-shot: swaps in our railway_line_high (sql/) after each database pull. Run by
+  # `make up` and refresh.sh, not by `docker compose up`, hence the profile.
+  orm-patch:
+    image: ghcr.io/hiddewie/openrailwaymap-import-db:latest
+    profiles: ["patch"]
+    entrypoint: ["psql", "-h", "orm-db", "-U", "postgres", "-d", "gis", "-v", "ON_ERROR_STOP=1",
+                 "-f", "/sql/railway_line_high.sql"]
+    volumes:
+      - ./sql:/sql:ro
+    depends_on:
+      orm-db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - orm
+
   martin-orm:
     build:
       context: https://github.com/hiddewie/OpenRailwayMap-vector.git

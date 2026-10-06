@@ -3,6 +3,7 @@
 # Up: start the stack. The first run pulls the ~2.3 GB database image and builds Martin.
 up: network
 	docker compose up -d --build --wait
+	docker compose run --rm orm-patch
 	@echo "✅ Up. Test a tile: docker run --rm --network trainlog_network curlimages/curl -sI http://orm:5000/railway_line_high/8/132/88"
 
 # Refresh: pull upstream's latest database, rebuild Martin from the same commit, swap both

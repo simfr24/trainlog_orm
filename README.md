@@ -46,6 +46,15 @@ Tile paths are the same as upstream's (e.g. `/railway_line_high,railway_text_km/
 Trainlog fetches `{tiles_url}/style.json` once a day and rewrites its relative sources to
 `tiles_url`.
 
+## Patched tile function
+
+`sql/railway_line_high.sql` replaces upstream's `railway_line_high` with a copy that merges
+ways not in service (proposed, construction, disused…) into one line per stretch, so their
+dash patterns don't restart on every OSM way, and shows narrow gauge main lines (Corsica…)
+from zoom 7 instead of 10. The one-shot `orm-patch` service applies it
+after each database pull (`make up`, `refresh.sh`). It is a copy: when upstream changes
+`railway_line_high` in `import/sql/tile_views.sql`, port the change.
+
 ## Refreshing
 
 Upstream rebuilds the database nightly from 22:47 UTC. `refresh.sh` (or `make refresh`) pulls
