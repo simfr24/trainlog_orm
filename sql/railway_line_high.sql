@@ -76,19 +76,23 @@ RETURN (
           true
       END
   ),
-  -- Untagged narrow gauge (which upstream only shows from zoom 10) is mostly short tourist and
-  -- industrial lines that came out as scattered dots; below zoom 10 keep only networks of at
-  -- least 30 km (way_length is in Web Mercator metres)
-  untagged AS (
+  -- Below zoom 10 (where upstream shows no narrow gauge) short isolated lines, rack and tourist
+  -- railways mostly, came out as scattered dots: keep only connected networks of at least 30 km
+  -- (way_length is in Web Mercator metres). Measured over ways up to 100 km around the tile, so a
+  -- network crossing the tile edge isn't judged on its in-tile part, and tagged or not, so a line
+  -- with mixed usage tags isn't split
+  narrow_gauge AS (
     SELECT id, way_length, ST_ClusterDBSCAN(way, eps := 50, minpoints := 1) OVER () AS network
-    FROM candidates
-    WHERE z < 10 AND feature = 'narrow_gauge' AND usage IS NULL
+    FROM railway_line
+    WHERE z < 10
+      AND way && ST_Expand(ST_TileEnvelope(z, x, y), 100000)
+      AND feature = 'narrow_gauge' AND state = 'present' AND service IS NULL
   ),
   lines AS (
     SELECT * FROM candidates
     WHERE id NOT IN (
-      SELECT id FROM untagged
-      WHERE network IN (SELECT network FROM untagged GROUP BY network HAVING sum(way_length) < 30000)
+      SELECT id FROM narrow_gauge
+      WHERE network IN (SELECT network FROM narrow_gauge GROUP BY network HAVING sum(way_length) < 30000)
     )
   ),
   merged AS (
