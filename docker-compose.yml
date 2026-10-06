@@ -26,11 +26,12 @@ services:
     container_name: orm-db
     restart: unless-stopped
     # The cap includes the page cache: at 3g the database was re-read from disk constantly.
-    # Flags override the ALTER SYSTEM tuning upstream's image bakes in (1GB shared_buffers)
+    # Flags override the ALTER SYSTEM tuning upstream's image bakes in (1GB shared_buffers).
+    # JIT off: compiling cost seconds per tile on heavier tile queries and never paid back
     # Room for the whole database in memory (sql/prewarm.sql loads it after each pull)
     shm_size: 20g
     mem_limit: 48g
-    command: ["postgres", "-c", "shared_buffers=16GB", "-c", "effective_cache_size=40GB", "-c", "work_mem=64MB"]
+    command: ["postgres", "-c", "shared_buffers=16GB", "-c", "effective_cache_size=40GB", "-c", "work_mem=64MB", "-c", "jit=off"]
     environment:
       - PGDATA=/data/postgresql
       - POSTGRES_DB=gis

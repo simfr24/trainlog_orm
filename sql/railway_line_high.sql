@@ -12,6 +12,9 @@ CREATE OR REPLACE FUNCTION railway_line_high(z integer, x integer, y integer)
   IMMUTABLE
   STRICT
   PARALLEL SAFE
+  -- The merging below pushes the planner's estimate past jit_above_cost, and compiling took ~3s
+  -- per tile, far more than the query itself
+  SET jit = off
 RETURN (
   WITH lines AS (
     SELECT
@@ -71,7 +74,16 @@ RETURN (
     SELECT * FROM lines WHERE state = 'present' AND z >= 10
     UNION ALL
     SELECT
-      min(id), ST_LineMerge(ST_Collect(way)), sum(way_length),
+      min(id),
+      -- Clipped to the tile (and its buffer) first: merging and the double track check below
+      -- otherwise worked on whole lines at full detail, which made tiles several times slower
+      ST_Simplify(
+        ST_LineMerge(ST_CollectionExtract(ST_Collect(
+          ST_ClipByBox2D(way, ST_Expand(ST_TileEnvelope(z, x, y), 40075016.68 / 2 ^ z * 64 / 4096))), 2)),
+        -- One tile pixel (of 4096) below zoom 10: the full detail was most of the vertices and
+        -- none of the look
+        CASE WHEN z < 10 THEN 40075016.68 / (4096 * 2 ^ z) ELSE 0 END),
+      sum(way_length),
       -- Bridges and tunnels are separate ways: splitting on them left a gap, and a restart, at each
       NULL::integer, rank, feature, state, usage, service, highspeed, preserved, false, false, name, ref,
       track_ref, track_class, preferred_direction, maxspeed, speed_label, train_protection_rank,
@@ -106,7 +118,8 @@ RETURN (
       SELECT 1 FROM parts b
       WHERE b.id = a.id
         AND (b.length, b.path) > (a.length, a.path)
-        AND ST_Covers(ST_Buffer(b.geom, 2 * 40075016.68 / (256 * 2 ^ z)), a.geom)
+        AND ST_DWithin(a.geom, b.geom, 2 * 40075016.68 / (256 * 2 ^ z))
+        AND ST_Covers(ST_Buffer(b.geom, 2 * 40075016.68 / (256 * 2 ^ z), 'quad_segs=1'), a.geom)
     )
     GROUP BY id
   )
@@ -115,13 +128,7 @@ RETURN (
   FROM (
     SELECT
       id,
-      ST_AsMVTGeom(
-        CASE
-          -- One tile pixel (of 4096): the full detail was most of the vertices and none of the look
-          WHEN z < 10 THEN ST_Simplify(coalesce(kept.way, merged.way), 40075016.68 / (4096 * 2 ^ z))
-          ELSE coalesce(kept.way, merged.way)
-        END,
-        ST_TileEnvelope(z, x, y), extent => 4096, buffer => 64, clip_geom => true) AS way,
+      ST_AsMVTGeom(coalesce(kept.way, merged.way), ST_TileEnvelope(z, x, y), extent => 4096, buffer => 64, clip_geom => true) AS way,
       way_length,
       feature,
       state,
