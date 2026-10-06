@@ -29,11 +29,11 @@ for source in standard_railway_line_low speed_railway_line_low \
     electrification_railway_line_low track_railway_line_low operator_railway_line_low; do
   tiles "$source" 0 6
 done >> "$list"
-# Zoom 7+ lines: the overlay's two sources, and Trainlog Rail's
-tiles railway_line_high 7 8 >> "$list"
-tiles railway_line_high,railway_text_km 8 8 >> "$list"
+# Zoom 7+ lines: the one URL the overlay and Trainlog Rail share
+tiles railway_line_high,railway_text_km 7 8 >> "$list"
 
 echo "$(date -Is) warming $(grep -c '^url' "$list") tiles"
 # One line per HTTP status (000: no answer), so a run that went nowhere shows
-curl --silent --parallel --parallel-max 16 --config "$list" --write-out '%{http_code}\n' | sort | uniq -c || true
+# 6 at a time leaves half the CPU to live traffic
+curl --silent --parallel --parallel-max 6 --config "$list" --write-out '%{http_code}\n' | sort | uniq -c || true
 echo "$(date -Is) warm done"
