@@ -55,6 +55,13 @@ track proposals. The one-shot `orm-patch` service applies it
 after each database pull (`make up`, `refresh.sh`). It is a copy: when upstream changes
 `railway_line_high` in `import/sql/tile_views.sql`, port the change.
 
+## Speed
+
+The database gets enough memory to sit entirely in RAM, and `sql/prewarm.sql` loads it there
+after each pull. `warm.sh` (`make warm`, also run by `refresh.sh`) then renders every overlay
+tile up to zoom 8 into the nginx cache, through a private port that always re-renders, so
+zoomed out maps are served from memory only.
+
 ## Refreshing
 
 Upstream rebuilds the database nightly from 22:47 UTC. `refresh.sh` (or `make refresh`) pulls

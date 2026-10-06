@@ -27,9 +27,10 @@ services:
     restart: unless-stopped
     # The cap includes the page cache: at 3g the database was re-read from disk constantly.
     # Flags override the ALTER SYSTEM tuning upstream's image bakes in (1GB shared_buffers)
-    shm_size: 8g
-    mem_limit: 32g
-    command: ["postgres", "-c", "shared_buffers=8GB", "-c", "effective_cache_size=24GB", "-c", "work_mem=64MB"]
+    # Room for the whole database in memory (sql/prewarm.sql loads it after each pull)
+    shm_size: 20g
+    mem_limit: 48g
+    command: ["postgres", "-c", "shared_buffers=16GB", "-c", "effective_cache_size=40GB", "-c", "work_mem=64MB"]
     environment:
       - PGDATA=/data/postgresql
       - POSTGRES_DB=gis
@@ -51,12 +52,24 @@ services:
     image: ghcr.io/hiddewie/openrailwaymap-import-db:latest
     profiles: ["patch"]
     entrypoint: ["psql", "-h", "orm-db", "-U", "postgres", "-d", "gis", "-v", "ON_ERROR_STOP=1",
-                 "-f", "/sql/railway_line_high.sql"]
+                 "-f", "/sql/railway_line_high.sql", "-f", "/sql/prewarm.sql"]
     volumes:
       - ./sql:/sql:ro
     depends_on:
       orm-db:
         condition: service_healthy
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - orm
+
+  # One-shot: renders every overlay tile up to zoom 8 into the cache (warm.sh)
+  warm:
+    image: curlimages/curl:latest
+    profiles: ["warm"]
+    entrypoint: ["sh", "/warm.sh"]
+    volumes:
+      - ./warm.sh:/warm.sh:ro
     labels:
       - "traefik.enable=false"
     networks:
@@ -101,7 +114,8 @@ services:
       - martin-orm
     volumes:
       - cache:/var/cache/nginx/orm
-    mem_limit: 1g
+    # The whole tile cache (max_size 10g) stays in the page cache
+    mem_limit: 12g
     networks:
       - orm
       - default

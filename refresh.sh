@@ -18,6 +18,8 @@ docker compose run --rm orm-patch
 # Martin's pool held connections to the old database container
 docker compose up -d --force-recreate martin-orm
 docker compose up -d orm
+# Render every tile up to zoom 8 so zoomed out maps never wait on the database
+docker compose run --rm warm
 # Drop the previous ~10 GB database image now that nothing uses it
 docker image prune -f
 echo "== $(date -Is) refresh done"
