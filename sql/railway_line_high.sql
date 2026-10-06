@@ -1,8 +1,8 @@
 -- Replaces upstream's railway_line_high (import/sql/tile_views.sql) after every database pull.
 -- Planned and former lines are mapped as many short ways, and MapLibre restarts a dash pattern
 -- at the start of every feature, so their dashes came out ragged. Here ways that are not in
--- service and share every attribute the style reads are merged into one line per stretch.
--- Lines in service are left as upstream builds them.
+-- service and share every attribute the style reads are merged into one line per stretch. Below
+-- zoom 10 lines in service are merged and simplified too, to keep tiles light for browsers.
 --
 -- A copy of upstream's function: when upstream changes its columns or zoom rules, bring them
 -- over here too, or the tiles silently keep the old ones.
@@ -65,8 +65,10 @@ RETURN (
           true
       END
   ),
+  -- Below zoom 10 lines in service are merged too: upstream sends every way with ~30 properties,
+  -- some 10,000 features per zoom 7 tile, and decoding a screenful of those took browsers 10s+
   merged AS (
-    SELECT * FROM lines WHERE state = 'present'
+    SELECT * FROM lines WHERE state = 'present' AND z >= 10
     UNION ALL
     SELECT
       min(id), ST_LineMerge(ST_Collect(way)), sum(way_length),
@@ -79,7 +81,7 @@ RETURN (
       loading_gauge, operator, operator_color, operator_bright, primary_operator, owner, route_count,
       passenger_lines, rack, radio
     FROM lines
-    WHERE state IS DISTINCT FROM 'present'
+    WHERE state IS DISTINCT FROM 'present' OR z < 10
     GROUP BY
       rank, feature, state, usage, service, highspeed, preserved, name, ref,
       track_ref, track_class, preferred_direction, maxspeed, speed_label, train_protection_rank,
@@ -89,13 +91,13 @@ RETURN (
       loading_gauge, operator, operator_color, operator_bright, primary_operator, owner, route_count,
       passenger_lines, rack, radio
   ),
-  -- Double track proposals are mapped as two parallel ways, which merge into two parts lying on
-  -- top of each other at these zooms, their dashes out of step. Keep only the longest of the
-  -- parts within 2 pixels of each other
+  -- Double track is mapped as two parallel ways, which merge into two parts lying on top of each
+  -- other (dashes out of step on planned lines, twice the features on the rest). Keep only the
+  -- longest of the parts within 2 pixels of each other
   parts AS (
     SELECT id, part.geom, part.path, ST_Length(part.geom) AS length
     FROM merged, ST_Dump(way) AS part
-    WHERE state IS DISTINCT FROM 'present'
+    WHERE state IS DISTINCT FROM 'present' OR z < 10
   ),
   kept AS (
     SELECT id, ST_Collect(geom) AS way
@@ -113,7 +115,13 @@ RETURN (
   FROM (
     SELECT
       id,
-      ST_AsMVTGeom(coalesce(kept.way, merged.way), ST_TileEnvelope(z, x, y), extent => 4096, buffer => 64, clip_geom => true) AS way,
+      ST_AsMVTGeom(
+        CASE
+          -- One tile pixel (of 4096): the full detail was most of the vertices and none of the look
+          WHEN z < 10 THEN ST_Simplify(coalesce(kept.way, merged.way), 40075016.68 / (4096 * 2 ^ z))
+          ELSE coalesce(kept.way, merged.way)
+        END,
+        ST_TileEnvelope(z, x, y), extent => 4096, buffer => 64, clip_geom => true) AS way,
       way_length,
       feature,
       state,
