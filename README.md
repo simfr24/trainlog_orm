@@ -1,0 +1,64 @@
+# trainlog_orm
+
+Self-hosted [OpenRailwayMap](https://github.com/hiddewie/OpenRailwayMap-vector) vector
+tiles for Trainlog's OpenRailwayMap map overlay.
+
+openrailwaymap.app rate-limited Trainlog, and its
+[usage policy](https://github.com/hiddewie/OpenRailwayMap-vector/blob/master/USAGE.md) only
+covers apps usable without registration, which the overlay isn't. So we serve the tiles
+ourselves.
+
+No OSM import happens here. Upstream's nightly GitHub Actions job imports the whole planet
+and publishes the finished PostGIS database as a public image
+(`ghcr.io/hiddewie/openrailwaymap-import-db`). This repo pulls that image, builds Martin from
+upstream's own `martin.Dockerfile` and puts an nginx cache in front.
+
+| Container | What | Network |
+|---|---|---|
+| `orm-db` | upstream's imported database (~2.3 GB compressed; data is inside the image) | private |
+| `martin-orm` | upstream's Martin build, rendering tiles from SQL functions in the database | private |
+| `orm` | nginx tile cache (1 day, stale served while the database restarts) on port 5000 | private + `trainlog_network` |
+
+## Running
+
+```
+make up
+```
+
+Then expose it through the `services_proxy` nginx: add a line to `nginx.conf` in the infra
+repo, next to `train-gh`:
+
+```
+if ($service = "orm") { set $target "orm"; set $port 5000; }
+```
+
+It's then reachable at `orm.srv.trainlog.me`. Point Trainlog at it in `config.yaml` and
+restart the app:
+
+```yaml
+openrailwaymap:
+  tiles_url: https://orm.srv.trainlog.me
+```
+
+Tile paths are the same as upstream's (e.g. `/railway_line_high,railway_text_km/{z}/{x}/{y}`).
+Trainlog still fetches `style.json` from openrailwaymap.app, once a day, and rewrites its
+sources to `tiles_url`.
+
+## Refreshing
+
+Upstream rebuilds the database nightly from 22:47 UTC. `refresh.sh` (or `make refresh`) pulls
+it, rebuilds Martin from the same upstream commit so its SQL functions exist in the database,
+recreates both and prunes the old image. Run it from cron after upstream finishes:
+
+```
+0 6 * * * /path/to/trainlog_orm/refresh.sh >> /path/to/trainlog_orm/refresh.log 2>&1
+```
+
+During the swap the database is down for a few seconds; nginx keeps serving cached tiles.
+
+## Resources
+
+- Disk: the database image unpacks to roughly 10 GB (not yet measured), and two copies exist
+  during a refresh until the prune. The nginx cache is capped at 10 GB.
+- Memory: `orm-db` is capped at 3 GB (upstream tunes `shared_buffers` to 1 GB), `martin-orm`
+  at 1 GB, `orm` at 256 MB.
