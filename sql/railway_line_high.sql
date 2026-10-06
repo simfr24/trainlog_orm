@@ -4,11 +4,55 @@
 -- service and share every attribute the style reads are merged into one line per stretch.
 -- Lines in service are left as upstream builds them.
 --
--- Also shows narrow gauge main lines from zoom 5 rather than 10: networks like Corsica's are
+-- Also shows narrow gauge networks from zoom 5 rather than 10: networks like Corsica's are
 -- metre gauge and mostly carry no usage tag, so upstream's low zoom rules skipped them.
 --
 -- A copy of upstream's function: when upstream changes its columns or zoom rules, bring them
 -- over here too, or the tiles silently keep the old ones.
+
+-- Narrow gauge shown below zoom 10. Short isolated lines, rack and tourist railways mostly, came
+-- out as scattered dots, so only connected networks of at least 30 km are kept (way_length is in
+-- Web Mercator metres; tagged or not, so a line with mixed usage tags isn't split). Built once per
+-- database pull: worked out per tile, it saturated the database
+CREATE TABLE IF NOT EXISTS trainlog_narrow_gauge AS
+  SELECT
+      id, way, way_length,
+      layer, rank, feature, state, usage, service, highspeed, preserved, tunnel, bridge, name, ref,
+      track_ref, track_class, preferred_direction, maxspeed, speed_label, train_protection_rank,
+      train_protection, train_protection_construction_rank, train_protection_construction,
+      electrification_state, voltage, frequency, maximum_current, future_voltage, future_frequency,
+      future_maximum_current, gauges, gaugeint0, gauge0, gaugeint1, gauge1, gaugeint2, gauge2,
+      loading_gauge, operator, operator_color, operator_bright, primary_operator, owner, route_count,
+      passenger_lines, rack, radio
+  FROM railway_line_view
+  WITH NO DATA;
+CREATE INDEX IF NOT EXISTS trainlog_narrow_gauge_way ON trainlog_narrow_gauge USING gist (way);
+
+BEGIN;
+DELETE FROM trainlog_narrow_gauge;
+INSERT INTO trainlog_narrow_gauge
+  WITH ways AS (
+    SELECT id, way_length, ST_ClusterDBSCAN(way, eps := 50, minpoints := 1) OVER () AS network
+    FROM railway_line
+    WHERE feature = 'narrow_gauge' AND state = 'present' AND service IS NULL
+  )
+  SELECT
+      id, way, way_length,
+      layer, rank, feature, state, usage, service, highspeed, preserved, tunnel, bridge, name, ref,
+      track_ref, track_class, preferred_direction, maxspeed, speed_label, train_protection_rank,
+      train_protection, train_protection_construction_rank, train_protection_construction,
+      electrification_state, voltage, frequency, maximum_current, future_voltage, future_frequency,
+      future_maximum_current, gauges, gaugeint0, gauge0, gaugeint1, gauge1, gaugeint2, gauge2,
+      loading_gauge, operator, operator_color, operator_bright, primary_operator, owner, route_count,
+      passenger_lines, rack, radio
+  FROM railway_line_view
+  WHERE id IN (
+      SELECT id FROM ways
+      WHERE network IN (SELECT network FROM ways GROUP BY network HAVING sum(way_length) >= 30000)
+    )
+    AND (usage IS NULL OR usage IN ('main', 'branch'));
+COMMIT;
+
 CREATE OR REPLACE FUNCTION railway_line_high(z integer, x integer, y integer)
   RETURNS bytea
   LANGUAGE SQL
@@ -16,7 +60,7 @@ CREATE OR REPLACE FUNCTION railway_line_high(z integer, x integer, y integer)
   STRICT
   PARALLEL SAFE
 RETURN (
-  WITH candidates AS (
+  WITH lines AS (
     SELECT
       id, way, way_length,
       layer, rank, feature, state, usage, service, highspeed, preserved, tunnel, bridge, name, ref,
@@ -28,36 +72,30 @@ RETURN (
       passenger_lines, rack, radio
     FROM railway_line_view
     WHERE
-      way && ST_TileEnvelope(z, x, y)
+      -- Martin serves this function from zoom 5 (docker-compose.yml), for the narrow gauge below
+      z >= 7
+      AND way && ST_TileEnvelope(z, x, y)
       -- conditionally include features based on zoom level
       AND CASE
-        -- Zooms < 7 are handled in the low zoom tiles, which leave out narrow gauge: add it here
-        -- (Martin serves this function from zoom 5, see docker-compose.yml)
-        WHEN z < 7 THEN
-          state = 'present'
-            AND service IS NULL
-            AND feature = 'narrow_gauge' AND (usage IS NULL OR usage IN ('main', 'branch'))
+        -- Zooms < 7 are handled in the low zoom tiles
         WHEN z < 8 THEN
           state = 'present'
             AND service IS NULL
             AND (
               feature IN ('rail', 'ferry') AND usage IN ('main', 'branch')
-                OR (feature = 'narrow_gauge' AND (usage IS NULL OR usage IN ('main', 'branch')))
             )
         WHEN z < 9 THEN
           state IN ('present', 'construction', 'proposed')
             AND service IS NULL
             AND (
               feature IN ('rail', 'ferry') AND usage IN ('main', 'branch')
-                OR (feature = 'narrow_gauge' AND (usage IS NULL OR usage IN ('main', 'branch')))
             )
         WHEN z < 10 THEN
           state IN ('present', 'construction', 'proposed')
             AND service IS NULL
             AND (
               feature IN ('rail', 'ferry') AND usage IN ('main', 'branch', 'industrial')
-                OR (feature IN ('light_rail', 'narrow_gauge') AND usage IN ('main', 'branch'))
-                OR (feature = 'narrow_gauge' AND usage IS NULL)
+                OR (feature = 'light_rail' AND usage IN ('main', 'branch'))
             )
         WHEN z < 11 THEN
           state IN ('present', 'construction', 'proposed')
@@ -75,25 +113,9 @@ RETURN (
         ELSE
           true
       END
-  ),
-  -- Below zoom 10 (where upstream shows no narrow gauge) short isolated lines, rack and tourist
-  -- railways mostly, came out as scattered dots: keep only connected networks of at least 30 km
-  -- (way_length is in Web Mercator metres). Measured over ways up to 100 km around the tile, so a
-  -- network crossing the tile edge isn't judged on its in-tile part, and tagged or not, so a line
-  -- with mixed usage tags isn't split
-  narrow_gauge AS (
-    SELECT id, way_length, ST_ClusterDBSCAN(way, eps := 50, minpoints := 1) OVER () AS network
-    FROM railway_line
-    WHERE z < 10
-      AND way && ST_Expand(ST_TileEnvelope(z, x, y), 100000)
-      AND feature = 'narrow_gauge' AND state = 'present' AND service IS NULL
-  ),
-  lines AS (
-    SELECT * FROM candidates
-    WHERE id NOT IN (
-      SELECT id FROM narrow_gauge
-      WHERE network IN (SELECT network FROM narrow_gauge GROUP BY network HAVING sum(way_length) < 30000)
-    )
+    UNION ALL
+    SELECT * FROM trainlog_narrow_gauge
+    WHERE z < 10 AND way && ST_TileEnvelope(z, x, y)
   ),
   merged AS (
     SELECT * FROM lines WHERE state = 'present'
