@@ -34,5 +34,6 @@ tiles railway_line_high 7 8 >> "$list"
 tiles railway_line_high,railway_text_km 8 8 >> "$list"
 
 echo "$(date -Is) warming $(grep -c '^url' "$list") tiles"
-curl --silent --parallel --parallel-max 16 --config "$list" || true
+# One line per HTTP status (000: no answer), so a run that went nowhere shows
+curl --silent --parallel --parallel-max 16 --config "$list" --write-out '%{http_code}\n' | sort | uniq -c || true
 echo "$(date -Is) warm done"
