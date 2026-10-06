@@ -67,7 +67,7 @@ zoomed out maps are served from memory only.
 Below zoom 6 Trainlog shows the overlay as images: upstream's low zoom vector tiles are slow to
 decode, and a stretched vector tile turns into a staircase while zooming in. `style-init`
 fetches Trainlog's render styles (`/getORMStyle/<mode>.json?render`), `martin-render` draws
-them, and nginx serves and caches them at `/raster/<mode>-<bold|thin>/{z}/{x}/{y}.png`
+them, and nginx serves and caches them at `/raster/<mode>/{z}/{x}/{y}.png`
 (zoom 0-5 only). The warm renders them all. After deploying a Trainlog change to the overlay
 style, refresh them:
 

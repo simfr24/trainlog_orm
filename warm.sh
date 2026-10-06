@@ -37,9 +37,7 @@ fi
 # The overlay below zoom 6 as images, rendered from the vector tiles above (martin-render),
 # so last
 for mode in standard speed signals electrification track; do
-  for variant in bold thin; do
-    tiles "raster/$mode-$variant" 0 5 .png
-  done
+  tiles "raster/$mode" 0 5 .png
 done >> "$list"
 
 total=$(grep -c '^url' "$list")
