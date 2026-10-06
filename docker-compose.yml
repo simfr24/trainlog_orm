@@ -10,7 +10,8 @@
 #               just a pull + recreate. ~2.3 GB compressed.
 #   martin-orm  built from upstream's own martin.Dockerfile, so the Martin version and
 #               the SQL function sources always match the database we pulled.
-#   orm         nginx cache in front, the only container on trainlog_network. The
+#   orm         nginx cache in front, also serving upstream's style.json built from
+#               the same commit (Dockerfile). The only container on trainlog_network. The
 #               services_proxy nginx reaches it by container name
 #               (orm.srv.trainlog.me -> orm:5000); Trainlog points at it with
 #               openrailwaymap.tiles_url in config.yaml.
@@ -69,13 +70,16 @@ services:
       - orm
 
   orm:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      additional_contexts:
+        upstream: https://github.com/hiddewie/OpenRailwayMap-vector.git
+    image: trainlog/openrailwaymap-proxy:latest
     container_name: orm
     restart: unless-stopped
     depends_on:
       - martin-orm
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - cache:/var/cache/nginx/orm
     mem_limit: 256m
     networks:

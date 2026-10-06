@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Pull upstream's freshly imported database and rebuild Martin from the same upstream
-# commit, so the SQL functions Martin calls always exist in the database.
+# Pull upstream's freshly imported database and rebuild Martin and style.json from the
+# same upstream commit, so the SQL functions Martin calls always exist in the database and
+# the style matches the tiles.
 #
 # Upstream's nightly job starts 22:47 UTC and takes a few hours; run after it:
 #   0 6 * * * /path/to/trainlog_orm/refresh.sh >> /path/to/trainlog_orm/refresh.log 2>&1
@@ -11,7 +12,7 @@ cd "$(dirname "$0")"
 
 echo "== $(date -Is) refresh start"
 docker compose pull orm-db
-docker compose build --pull martin-orm
+docker compose build --pull martin-orm orm
 docker compose up -d --wait orm-db
 # Martin's pool held connections to the old database container
 docker compose up -d --force-recreate martin-orm

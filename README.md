@@ -11,13 +11,15 @@ ourselves.
 No OSM import happens here. Upstream's nightly GitHub Actions job imports the whole planet
 and publishes the finished PostGIS database as a public image
 (`ghcr.io/hiddewie/openrailwaymap-import-db`). This repo pulls that image, builds Martin from
-upstream's own `martin.Dockerfile` and puts an nginx cache in front.
+upstream's own `martin.Dockerfile` and puts an nginx cache in front, which also serves
+upstream's `style.json` built from the same commit. Nothing is fetched from
+openrailwaymap.app at runtime.
 
 | Container | What | Network |
 |---|---|---|
 | `orm-db` | upstream's imported database (~2.3 GB compressed; data is inside the image) | private |
 | `martin-orm` | upstream's Martin build, rendering tiles from SQL functions in the database | private |
-| `orm` | nginx tile cache (1 day, stale served while the database restarts) on port 5000 | private + `trainlog_network` |
+| `orm` | nginx tile cache (1 day, stale served while the database restarts) and `/style.json`, on port 5000 | private + `trainlog_network` |
 
 ## Running
 
@@ -41,13 +43,14 @@ openrailwaymap:
 ```
 
 Tile paths are the same as upstream's (e.g. `/railway_line_high,railway_text_km/{z}/{x}/{y}`).
-Trainlog still fetches `style.json` from openrailwaymap.app, once a day, and rewrites its
-sources to `tiles_url`.
+Trainlog fetches `{tiles_url}/style.json` once a day and rewrites its relative sources to
+`tiles_url`.
 
 ## Refreshing
 
 Upstream rebuilds the database nightly from 22:47 UTC. `refresh.sh` (or `make refresh`) pulls
-it, rebuilds Martin from the same upstream commit so its SQL functions exist in the database,
+it, rebuilds Martin and `style.json` from the same upstream commit so Martin's SQL functions
+exist in the database and the style matches the tiles,
 recreates both and prunes the old image. Run it from cron after upstream finishes:
 
 ```
