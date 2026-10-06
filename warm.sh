@@ -32,8 +32,20 @@ done >> "$list"
 # Zoom 7+ lines: the one URL the overlay and Trainlog Rail share
 tiles railway_line_high,railway_text_km 7 8 >> "$list"
 
-echo "$(date -Is) warming $(grep -c '^url' "$list") tiles"
-# One line per HTTP status (000: no answer), so a run that went nowhere shows
-# 6 at a time leaves half the CPU to live traffic
-curl --silent --parallel --parallel-max 6 --config "$list" --write-out '%{http_code}\n' | sort | uniq -c || true
+total=$(grep -c '^url' "$list")
+echo "$(date -Is) warming $total tiles"
+# 6 at a time leaves half the CPU to live traffic. Progress every 1000 tiles (the ETA is rough:
+# ocean tiles are instant, cities take seconds), then one line per HTTP status (000: no
+# answer), so a run that went nowhere shows
+curl --silent --parallel --parallel-max 6 --config "$list" --write-out '%{http_code}\n' \
+  | awk -v total="$total" '
+      function now(  t) { "date +%s" | getline t; close("date +%s"); return t }
+      BEGIN { start = now() }
+      { status[$1]++ }
+      NR % 1000 == 0 {
+        elapsed = now() - start
+        printf "%d/%d (%.0f%%), %d min left\n", NR, total, 100 * NR / total, elapsed * (total - NR) / NR / 60
+        fflush()
+      }
+      END { for (s in status) print status[s], s }' || true
 echo "$(date -Is) warm done"
