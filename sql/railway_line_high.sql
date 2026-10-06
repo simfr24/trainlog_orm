@@ -4,7 +4,7 @@
 -- service and share every attribute the style reads are merged into one line per stretch.
 -- Lines in service are left as upstream builds them.
 --
--- Also shows narrow gauge main lines from zoom 7 rather than 10: networks like Corsica's are
+-- Also shows narrow gauge main lines from zoom 5 rather than 10: networks like Corsica's are
 -- metre gauge and mostly carry no usage tag, so upstream's low zoom rules skipped them.
 --
 -- A copy of upstream's function: when upstream changes its columns or zoom rules, bring them
@@ -31,7 +31,12 @@ RETURN (
       way && ST_TileEnvelope(z, x, y)
       -- conditionally include features based on zoom level
       AND CASE
-        -- Zooms < 7 are handled in the low zoom tiles
+        -- Zooms < 7 are handled in the low zoom tiles, which leave out narrow gauge: add it here
+        -- (Martin serves this function from zoom 5, see docker-compose.yml)
+        WHEN z < 7 THEN
+          state = 'present'
+            AND service IS NULL
+            AND feature = 'narrow_gauge' AND (usage IS NULL OR usage IN ('main', 'branch'))
         WHEN z < 8 THEN
           state = 'present'
             AND service IS NULL
@@ -94,13 +99,32 @@ RETURN (
       future_maximum_current, gauges, gaugeint0, gauge0, gaugeint1, gauge1, gaugeint2, gauge2,
       loading_gauge, operator, operator_color, operator_bright, primary_operator, owner, route_count,
       passenger_lines, rack, radio
+  ),
+  -- Double track proposals are mapped as two parallel ways, which merge into two parts lying on
+  -- top of each other at these zooms, their dashes out of step. Keep only the longest of the
+  -- parts within 2 pixels of each other
+  parts AS (
+    SELECT id, part.geom, part.path, ST_Length(part.geom) AS length
+    FROM merged, ST_Dump(way) AS part
+    WHERE state IS DISTINCT FROM 'present'
+  ),
+  kept AS (
+    SELECT id, ST_Collect(geom) AS way
+    FROM parts a
+    WHERE NOT EXISTS (
+      SELECT 1 FROM parts b
+      WHERE b.id = a.id
+        AND (b.length, b.path) > (a.length, a.path)
+        AND ST_Covers(ST_Buffer(b.geom, 2 * 40075016.68 / (256 * 2 ^ z)), a.geom)
+    )
+    GROUP BY id
   )
   SELECT
     ST_AsMVT(tile, 'railway_line_high', 4096, 'way')
   FROM (
     SELECT
       id,
-      ST_AsMVTGeom(way, ST_TileEnvelope(z, x, y), extent => 4096, buffer => 64, clip_geom => true) AS way,
+      ST_AsMVTGeom(coalesce(kept.way, merged.way), ST_TileEnvelope(z, x, y), extent => 4096, buffer => 64, clip_geom => true) AS way,
       way_length,
       feature,
       state,
@@ -149,6 +173,7 @@ RETURN (
       rack,
       radio
     FROM merged
+    LEFT JOIN kept USING (id)
     ORDER by
       coalesce(layer, 0),
       rank NULLS LAST,

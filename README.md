@@ -51,7 +51,8 @@ Trainlog fetches `{tiles_url}/style.json` once a day and rewrites its relative s
 `sql/railway_line_high.sql` replaces upstream's `railway_line_high` with a copy that merges
 ways not in service (proposed, construction, disused…) into one line per stretch, so their
 dash patterns don't restart on every OSM way, and shows narrow gauge main lines (Corsica…)
-from zoom 7 instead of 10. The one-shot `orm-patch` service applies it
+from zoom 5 instead of 10 (`martin-orm` patches upstream's Martin config to serve the function
+from zoom 5). The one-shot `orm-patch` service applies it
 after each database pull (`make up`, `refresh.sh`). It is a copy: when upstream changes
 `railway_line_high` in `import/sql/tile_views.sql`, port the change.
 

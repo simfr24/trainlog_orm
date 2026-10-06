@@ -66,6 +66,9 @@ services:
     image: trainlog/openrailwaymap-martin:latest
     container_name: martin-orm
     restart: unless-stopped
+    # Upstream's config with railway_line_high starting at zoom 5 instead of 7: our function
+    # (sql/) adds narrow gauge main lines there, which the low zoom tables leave out
+    entrypoint: ["sh", "-c", "sed '/^    railway_line_high:/,/minzoom/ s/minzoom: 7/minzoom: 5/' /config/configuration.yml > /tmp/martin.yml && exec martin --config /tmp/martin.yml --sprite /symbols"]
     depends_on:
       orm-db:
         condition: service_healthy
