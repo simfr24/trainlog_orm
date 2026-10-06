@@ -76,6 +76,45 @@ services:
     networks:
       - orm
 
+  # One-shot: fetches the overlay render styles from Trainlog for martin-render (styles.sh)
+  style-init:
+    image: curlimages/curl:8.11.1
+    # As root: the image's own user can't write to a fresh, root-owned named volume
+    user: "0:0"
+    entrypoint: ["sh", "/styles.sh"]
+    environment:
+      - TRAINLOG_URL=${TRAINLOG_URL:-https://trainlog.me}
+      # Trainlog's openrailwaymap.tiles_url, swapped for our nginx inside the network
+      - TILES_URL=${TILES_URL:-https://orm.srv.trainlog.me}
+    volumes:
+      - ./styles.sh:/styles.sh:ro
+      - styles:/styles
+    restart: "no"
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - orm
+      - default
+
+  # Renders the overlay below zoom 6 as images (martin-render.yaml), served by nginx at /raster/
+  martin-render:
+    image: ghcr.io/maplibre/martin:1.15.0
+    container_name: martin-render
+    command: ["-c", "/config/martin-render.yaml"]
+    volumes:
+      - ./martin-render.yaml:/config/martin-render.yaml:ro
+      - styles:/styles:ro
+    depends_on:
+      style-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # One MapLibre Native context per CPU it sees, ~120 MB each
+    mem_limit: 8g
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - orm
+
   martin-orm:
     build:
       context: https://github.com/hiddewie/OpenRailwayMap-vector.git
@@ -113,6 +152,7 @@ services:
     restart: unless-stopped
     depends_on:
       - martin-orm
+      - martin-render
     volumes:
       - cache:/var/cache/nginx/orm
     # The whole tile cache (max_size 10g) stays in the page cache
@@ -123,6 +163,7 @@ services:
 
 volumes:
   cache:
+  styles:
 
 # default is shared with the services_proxy nginx. The Makefile creates it if missing.
 networks:

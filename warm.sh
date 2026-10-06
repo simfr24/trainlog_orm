@@ -7,14 +7,14 @@ set -eu
 list=/tmp/tiles.txt
 : > "$list"
 
-tiles() { # source minzoom maxzoom
+tiles() { # path minzoom maxzoom [extension]
   z=$2
   while [ "$z" -le "$3" ]; do
     n=$((1 << z)) x=0
     while [ "$x" -lt "$n" ]; do
       y=0
       while [ "$y" -lt "$n" ]; do
-        printf 'url = "http://orm:5001/%s/%s/%s/%s"\noutput = "/dev/null"\n' "$1" "$z" "$x" "$y"
+        printf 'url = "http://orm:5001/%s/%s/%s/%s%s"\noutput = "/dev/null"\n' "$1" "$z" "$x" "$y" "${4:-}"
         y=$((y + 1))
       done
       x=$((x + 1))
@@ -31,6 +31,13 @@ for source in standard_railway_line_low speed_railway_line_low \
 done >> "$list"
 # Zoom 7+ lines: the one URL the overlay and Trainlog Rail share
 tiles railway_line_high,railway_text_km 7 8 >> "$list"
+# The overlay below zoom 6 as images, rendered from the vector tiles above (martin-render),
+# so last
+for mode in standard speed signals electrification track; do
+  for variant in bold thin; do
+    tiles "raster/$mode-$variant" 0 5 .png
+  done
+done >> "$list"
 
 total=$(grep -c '^url' "$list")
 echo "$(date -Is) warming $total tiles"

@@ -1,0 +1,19 @@
+# Renders the overlay below zoom 6 as images (nginx /raster/), from the styles style-init
+# fetches from Trainlog. Tile data comes from our own nginx, so rendering never touches the
+# database directly. Rendering is experimental in Martin 1.15: keep the image tag pinned.
+listen_addresses: 0.0.0.0:3000
+cache_size_mb: 0
+
+styles:
+  rendering: true
+  sources:
+    standard-bold: /styles/standard-bold.json
+    standard-thin: /styles/standard-thin.json
+    speed-bold: /styles/speed-bold.json
+    speed-thin: /styles/speed-thin.json
+    signals-bold: /styles/signals-bold.json
+    signals-thin: /styles/signals-thin.json
+    electrification-bold: /styles/electrification-bold.json
+    electrification-thin: /styles/electrification-thin.json
+    track-bold: /styles/track-bold.json
+    track-thin: /styles/track-thin.json
