@@ -53,6 +53,10 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://postgres@orm-db:5432/gis
+      # Required: upstream's config reads ${POSTGRES_RELOAD_INTERVAL:-0s}, and Martin's
+      # substitution has no shell-style default, so unset it becomes "-0s" and Martin
+      # refuses to start. 10s is what upstream itself runs with.
+      - POSTGRES_RELOAD_INTERVAL=10s
     ulimits:
       nproc: 65535
       nofile:
