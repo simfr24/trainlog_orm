@@ -86,6 +86,7 @@ services:
       - TRAINLOG_URL=${TRAINLOG_URL:-https://trainlog.me}
       # Trainlog's openrailwaymap.tiles_url, swapped for our nginx inside the network
       - TILES_URL=${TILES_URL:-https://orm.srv.trainlog.me}
+      - TRAINLOG_HOST=${TRAINLOG_HOST:-}
     volumes:
       - ./styles.sh:/styles.sh:ro
       - styles:/styles
