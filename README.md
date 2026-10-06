@@ -73,7 +73,7 @@ style, refresh them:
 
 ```
 docker compose up -d --force-recreate style-init martin-render
-docker compose run --rm warm
+RASTER_ONLY=1 docker compose run --rm warm
 ```
 
 ## Refreshing

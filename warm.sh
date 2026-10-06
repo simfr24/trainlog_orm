@@ -23,6 +23,8 @@ tiles() { # path minzoom maxzoom [extension]
   done
 }
 
+# RASTER_ONLY=1: just the images, after a change to Trainlog's overlay style
+if [ -z "${RASTER_ONLY:-}" ]; then
 # Low zoom line sources of the overlay presets (src/openrailwaymap.py in Trainlog)
 for source in standard_railway_line_low speed_railway_line_low \
     signals_railway_line_low,signals_railway_line_low_construction \
@@ -31,6 +33,7 @@ for source in standard_railway_line_low speed_railway_line_low \
 done >> "$list"
 # Zoom 7+ lines: the one URL the overlay and Trainlog Rail share
 tiles railway_line_high,railway_text_km 7 8 >> "$list"
+fi
 # The overlay below zoom 6 as images, rendered from the vector tiles above (martin-render),
 # so last
 for mode in standard speed signals electrification track; do

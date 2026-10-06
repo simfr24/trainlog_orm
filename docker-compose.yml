@@ -69,6 +69,8 @@ services:
     image: curlimages/curl:latest
     profiles: ["warm"]
     entrypoint: ["sh", "/warm.sh"]
+    environment:
+      - RASTER_ONLY=${RASTER_ONLY:-}
     volumes:
       - ./warm.sh:/warm.sh:ro
     labels:
