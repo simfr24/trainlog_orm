@@ -76,7 +76,8 @@ RETURN (
     UNION ALL
     SELECT
       min(id), ST_LineMerge(ST_Collect(way)), sum(way_length),
-      layer, rank, feature, state, usage, service, highspeed, preserved, tunnel, bridge, name, ref,
+      -- Bridges and tunnels are separate ways: splitting on them left a gap, and a restart, at each
+      NULL::integer, rank, feature, state, usage, service, highspeed, preserved, false, false, name, ref,
       track_ref, track_class, preferred_direction, maxspeed, speed_label, train_protection_rank,
       train_protection, train_protection_construction_rank, train_protection_construction,
       electrification_state, voltage, frequency, maximum_current, future_voltage, future_frequency,
@@ -86,7 +87,7 @@ RETURN (
     FROM lines
     WHERE state IS DISTINCT FROM 'present'
     GROUP BY
-      layer, rank, feature, state, usage, service, highspeed, preserved, tunnel, bridge, name, ref,
+      rank, feature, state, usage, service, highspeed, preserved, name, ref,
       track_ref, track_class, preferred_direction, maxspeed, speed_label, train_protection_rank,
       train_protection, train_protection_construction_rank, train_protection_construction,
       electrification_state, voltage, frequency, maximum_current, future_voltage, future_frequency,
